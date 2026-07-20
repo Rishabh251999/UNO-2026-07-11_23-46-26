@@ -39,6 +39,10 @@ namespace UNO
         internal readonly Dictionary<NetworkConnectionToClient, PlayerRoomInfo> playerInfos =
             new();
 
+        private readonly Dictionary<Guid, UnoDeck> roomDecks = new();
+
+        private readonly Dictionary<Guid, UnoGameController> matchControllers = new();
+
         /// <summary>
         /// Network connections that haven't joined a room yet
         /// </summary>
@@ -66,12 +70,13 @@ namespace UNO
         private int playerIndex = 1;
 
         [Header("GUI References")]
-        [SerializeField] private RoomGUI matchPrefab;
+        [SerializeField] private RoomGUI roomPrefab;
+        [SerializeField] private UnoGameController matchControllerPrefab;
 
         [SerializeField] private GameObject roomView;
-        [SerializeField] private Transform matchList;
         [SerializeField] private GameObject lobbyView;
-        [SerializeField] private GameObject matchControllerPrefab;
+
+        [SerializeField] private Transform matchList;
 
         [SerializeField] private ToggleGroup toggleGroup;
         [SerializeField] private Button createButton;
@@ -85,6 +90,8 @@ namespace UNO
             openRooms.Clear();
             roomConnections.Clear();
             waitingConnections.Clear();
+            roomDecks.Clear();
+            matchControllers.Clear();
             playerIndex = 1;
             localPlayerRoom = Guid.Empty;
             localJoinedRoom = Guid.Empty;
@@ -106,6 +113,7 @@ namespace UNO
         {
             InitializeData();
             NetworkServer.RegisterHandler<ServerRoomMessage>(OnServerRoomMessage);
+            NetworkServer.RegisterHandler<ServerDeckMessage>(OnServerDeckMessage);
         }
 
         [ServerCallback]
@@ -202,11 +210,14 @@ namespace UNO
         [ClientCallback]
         internal void OnStartClient()
         {
+            Card.PopulateCardSprites();
+
             InitializeData();
             ShowLobbyView();
             createButton.gameObject.SetActive(true);
             joinButton.gameObject.SetActive(true);
             NetworkClient.RegisterHandler<ClientRoomMessage>(OnClientRoomMessage);
+            NetworkClient.RegisterHandler<ClientDeckMessage>(OnClientDeckMessage);
         }
 
         [ClientCallback]
@@ -250,6 +261,52 @@ namespace UNO
                     break;
                 case ServerRoomOperation.Start:
                     OnServerStartGame(conn);
+                    break;
+            }
+        }
+
+        [ServerCallback]
+        private bool TryGetMatchController(NetworkConnectionToClient conn, out UnoGameController controller)
+        {
+            controller = null;
+
+            // Find which room this connection's player is in via NetworkMatch
+            if (conn.identity == null) return false;
+
+            if (!conn.identity.TryGetComponent<NetworkMatch>(out var networkMatch)) 
+                return false;
+
+            Guid roomCode = networkMatch.matchId;
+            return matchControllers.TryGetValue(roomCode, out controller);
+        }
+
+        [ServerCallback]
+        void OnServerDeckMessage(NetworkConnectionToClient conn, ServerDeckMessage msg)
+        {
+            if (!TryGetMatchController(conn, out var controller))
+            {
+                Debug.LogWarning("[Server] Could not find match controller for connection.");
+                return;
+            }
+
+            if (!controller.IsCurrentPlayer(conn))
+            {
+                Debug.LogWarning($"[Server] Player {conn.identity.netId} acted out of turn!");
+                return;
+            }
+
+            switch (msg.serverDeckOperation)
+            {
+                case ServerDeckOperation.PlayCard:
+                    controller.HandlePlayerCard(conn, msg.Card);
+                    break;
+
+                case ServerDeckOperation.DrawCard:
+                    controller.HandleDrawCard(conn);
+                    break;
+
+                case ServerDeckOperation.PassTurn:
+                    controller.HandlePassTurn(conn); // Draw card first, then pass turn
                     break;
             }
         }
@@ -444,6 +501,49 @@ namespace UNO
         [ServerCallback]
         private void OnServerStartGame(NetworkConnectionToClient conn)
         {
+            if(!playerRooms.TryGetValue(conn, out var roomCode))
+                return;
+
+            var matchController = Instantiate(matchControllerPrefab);
+            if (matchController.TryGetComponent<NetworkMatch>(out var networkMatch))
+            {
+                networkMatch.matchId = roomCode;
+            }
+            NetworkServer.Spawn(matchController.gameObject);
+            matchControllers[roomCode] = matchController;
+
+            UnoDeck deck = new();
+            deck.BuildDeck();
+            roomDecks[roomCode] = deck;
+
+            foreach (NetworkConnectionToClient playerConn in roomConnections[roomCode])
+            {
+                playerConn.Send(new ClientRoomMessage
+                {
+                    clientRoomOperation = ClientRoomOperation.Started,
+                    roomCode = roomCode
+                });
+
+                var player = Instantiate(NetworkManager.singleton.playerPrefab);
+                if (player.TryGetComponent<NetworkMatch>(out var playerNetworkMatch))
+                {
+                    playerNetworkMatch.matchId = roomCode;
+                }
+                NetworkServer.AddPlayerForConnection(playerConn, player);
+
+                matchController.AddPlayer(playerConn, playerInfos[playerConn]);
+
+                PlayerRoomInfo playerInfo = playerInfos[playerConn];
+                playerInfo.isReady = false;
+                playerInfos[playerConn] = playerInfo;
+            }
+
+            matchController.StartGame(deck);
+
+            playerRooms.Remove(conn);
+            openRooms.Remove(roomCode);
+            roomConnections.Remove(roomCode);
+
             SendRoomList();
         }
 
@@ -489,8 +589,60 @@ namespace UNO
                     _roomManager.RefreshRoomPlayers(msg.playerInfo);
                     break;
 
+                case ClientRoomOperation.Started:
+                    lobbyView.SetActive(false);
+                    roomView.SetActive(false);
+                    break;
+
                 case ClientRoomOperation.Error:
                     Debug.LogError($"Room error: {msg.errorMessage}");
+                    break;
+            }
+        }
+
+        [ClientCallback]
+        void OnClientDeckMessage(ClientDeckMessage msg)
+        {
+            if(UnoGameController.Instance is not { } gc)
+                return;
+
+            switch (msg.clientDeckOperation)
+            {
+                case ClientDeckOperation.CardDealt:
+                    Debug.Log($"[Deck] Received {msg.Cards.Length} cards.");
+                    gc.ShowDealtCards(msg.Cards);
+                    break;
+
+                case ClientDeckOperation.CardPlayed:
+                    // Server confirmed the play — nothing extra needed client-side.
+                    // RpcShowTopDiscard already updated the discard image.
+                    // SyncDictionary already updated the opponent card count.
+                    // OnCurrentPlayerChanged already advanced the turn UI.
+                    Debug.Log($"[Deck] Card played confirmed: {msg.TopDiscardCard}");
+                    break;
+
+                case ClientDeckOperation.CardDrawn:
+                    // Server sent us new cards (from DrawCard or DrawTwo/WildDrawFour penalty)
+                    Debug.Log($"[Deck] Drew {msg.Cards.Length} card(s).");
+                    gc.ShowDealtCards(msg.Cards);  
+                    gc.OnDrawnCardReceived(msg.CanPlayDrawnCard, msg.Cards[0]);// add cards to hand UI
+                    //gc.RefreshHandInteractability();   // re-evaluate which cards are now playable
+                    break;
+
+                case ClientDeckOperation.DeckReshuffled:
+                    Debug.Log($"[Deck] Deck reshuffled. {msg.DrawPileCount} cards remaining.");
+                    // DrawPileCount SyncVar/RpcShowTopDiscard will handle the count text already
+                    break;
+
+                case ClientDeckOperation.StackedDraw:
+                    // Player must draw msg.DrawPileCount cards or play a matching +2/+4
+                    Debug.Log($"[Deck] Stacked draw — you must draw {msg.DrawPileCount} or counter!");
+                    // TODO: highlight valid counter-cards
+                    break;
+
+                case ClientDeckOperation.Error:
+                    Debug.LogError($"[Deck] Error: {msg.errorMessage}");
+                    // TODO: optionally show an error popup in UI
                     break;
             }
         }
@@ -580,6 +732,17 @@ namespace UNO
             });
         }
 
+        [ClientCallback]
+        public void RequestStartGame()
+        {
+            if (localPlayerRoom == Guid.Empty) return;
+
+            NetworkClient.Send(new ServerRoomMessage
+            {
+                serverRoomOperation = ServerRoomOperation.Start,
+            });
+        }
+
         /// <summary>
         /// Called when a room is selected in the list
         /// </summary>
@@ -654,15 +817,17 @@ namespace UNO
             // Create UI elements for each room
             foreach (var roomInfo in openRooms.Values)
             {
-                var roomUIElement = Instantiate(matchPrefab, matchList.transform);
+                var roomUIElement = Instantiate(roomPrefab, matchList.transform);
                 roomUIElement.transform.SetParent(matchList.transform, false);
                 roomUIElement.SetRoomInfo(roomInfo);
 
-                var toggle = roomUIElement.GetComponent<Toggle>();
-                toggle.group = toggleGroup;
+                if (roomUIElement.TryGetComponent<Toggle>(out var toggle))
+                {
+                    toggle.group = toggleGroup;
 
-                if (roomInfo.roomCode == selectedRoom)
-                    toggle.isOn = true;
+                    if (roomInfo.roomCode == selectedRoom)
+                        toggle.isOn = true;
+                }
             }
         }
 
