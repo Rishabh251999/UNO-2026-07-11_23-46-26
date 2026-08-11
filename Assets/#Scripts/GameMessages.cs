@@ -77,6 +77,7 @@ namespace UNO
     {
         public int cardCount;
         public uint connectionId;
+        public string playerName;
     }
 
     /// <summary>

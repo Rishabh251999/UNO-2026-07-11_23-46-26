@@ -10,22 +10,45 @@ namespace UNO
     [RequireComponent(typeof(NetworkMatch))]
     public class UnoGameController : NetworkBehaviour
     {
+        private readonly WaitForSeconds _waitForSeconds0_12 = new(0.12f);
+
         public static UnoGameController Instance { get; private set; }
 
-        [Header("GUI References")]
-        [SerializeField] private CanvasGroup _canvasGroup;
-        [SerializeField] private GamePlayerGUI _playerGUIPrefab;
-
-        [SerializeField] private Transform _handContainer;
-        [SerializeField] private Transform _playersContainer;
-
+        [Header("Script References")]
         [SerializeField] private Card _cardPrefab;
 
-        [SerializeField] private Button _cardDrawButton;
-        [SerializeField] private Button _passTurnButton;
-        [SerializeField] private Image _topDiscardImage;
-        [SerializeField] private TextMeshProUGUI _drawPileCountText;
+        [Space(5)]
 
+        [Header("GUI References")]
+        [SerializeField] private GamePlayerGUI _playerGUIPrefab;
+        [Space(2.5f)]
+        [SerializeField] private Button _passTurnButton;
+        [Space(2.5f)]
+        [SerializeField] private Image _topDiscardImage;
+        [Space(2.5f)]
+        [SerializeField] private TextMeshProUGUI _drawPileCountText;
+        [SerializeField] private TextMeshProUGUI _currentPlayerNameText;
+        private Button _cardDrawButton;
+        private CanvasGroup _canvasGroup;
+        private GridLayoutGroup _handGridLayout;
+
+        [Space(5f)]
+
+        [Header("Gameobject References")]
+        public GameObject _canvas;
+        [SerializeField] private GameObject _cardDrawGameobject;
+        [SerializeField] private GameObject _hand;
+
+        [Space(5f)]
+
+        [Header("Transform References")]
+        [SerializeField] private Transform _cardTargetTransform;
+        private Transform _handContainer;
+        public Transform CardTargetTransform => _cardTargetTransform;
+
+        [SerializeField] private int _cardPerPlayer;
+        [SerializeField] private float _playMoveDuration = 0.3f;
+        public float PlayMoveDuration => _playMoveDuration;    
 
         private readonly List<uint> _turnOrder = new();
         private readonly List<GamePlayerGUI> _playerGUIs = new();
@@ -36,10 +59,11 @@ namespace UNO
 
         private UnoDeck _deck;
 
-        [SerializeField] private UnoCard _lastTopDiscard;
-
         [SyncVar(hook = nameof(OnCurrentPlayerChanged))]
         private uint _currentPlayerNetId;
+
+        [SyncVar(hook = nameof(OnTopDiscardChanged))]
+        private UnoCard _syncedTopDiscard;
 
         private int _turnIndex = 0;
         private int _turnDirection = 1;
@@ -59,6 +83,13 @@ namespace UNO
         public override void OnStartClient()
         {
             Instance = this;
+
+            _canvasGroup = _canvas.GetComponent<CanvasGroup>();
+            _cardDrawButton = _cardDrawGameobject.GetComponent<Button>();
+            _handGridLayout = _hand.GetComponent<GridLayoutGroup>();
+
+            _handContainer = _hand.transform;
+
             _canvasGroup.alpha = 1f;
             _canvasGroup.interactable = true;
             _canvasGroup.blocksRaycasts = true;
@@ -116,7 +147,8 @@ namespace UNO
             _playerData[netId] = new PlayerGameInfo
             {
                 connectionId = netId,
-                cardCount = 0
+                cardCount = 0,
+                playerName = info.playerName
             };
         }
 
@@ -124,7 +156,7 @@ namespace UNO
         public void StartGame(UnoDeck deck)
         {
             _deck = deck;
-            DealCards();
+            DealCards(_cardPerPlayer);
             FlipFirstCard();
             StartCoroutine(InitPanelNextFrame());
         }
@@ -133,17 +165,17 @@ namespace UNO
         private IEnumerator InitPanelNextFrame()
         {
             yield return null; // wait one frame so SyncDictionary flushes to all clients first
-            RpcInitPlayersPanel();
             SetNextTurn(_turnOrder[0]);
         }
 
         [Server]
-        private void DealCards()
+        private void DealCards(int count)
         {
             foreach (var (netId, entry) in _serverPlayers)
             {
-                var hand = new List<UnoCard>();
-                _deck.DrawMultiple(7, hand);
+                List<UnoCard> hand = new();
+
+                _deck.DrawMultiple(count, hand);
 
                 // Struct must be fully reassigned to trigger SyncDictionary sync
                 var data = _playerData[netId];
@@ -182,7 +214,7 @@ namespace UNO
             } while (true);
 
             _deck.Discard(firstCard);
-            RpcShowTopDiscard(firstCard, _deck.DrawPileCount + 1);
+            SetTopDiscard(firstCard, _deck.DrawPileCount + 1);
         }
 
         [Server]
@@ -235,18 +267,45 @@ namespace UNO
         // ── Client ────────────────────────────────────────────────────────────
 
         [Client]
-        public void ShowDealtCards(UnoCard[] cards)
+        public void ShowDealtCards(UnoCard[] cards, bool applyStartDelay = false)
         {
+            StartCoroutine(ShowDealtCardsStaggered(cards, applyStartDelay ? 0.5f : 0f));
+        }
+
+        private IEnumerator ShowDealtCardsStaggered(UnoCard[] cards, float startDelay)
+        {
+            if (startDelay > 0f)
+                yield return new WaitForSeconds(startDelay);
+
+            var views = new List<Card>();
+
             foreach (var card in cards)
             {
                 var cardView = Instantiate(_cardPrefab, _handContainer);
                 cardView.Setup(card);
+                views.Add(cardView);
+            }
+
+            // ONE rebuild with all cards still fully layout-controlled,
+            // so every card captures its correct, final grid slot.
+            LayoutRebuilder.ForceRebuildLayoutImmediate((RectTransform)_handContainer);
+
+            foreach (var cardView in views)
+                cardView.CaptureDealTarget();
+
+            // ONLY NOW do we start excluding cards from layout + snapping to origin.
+            foreach (var cardView in views)
+                cardView.PrepareDeal(_cardDrawGameobject.transform);
+
+            foreach (var cardView in views)
+            {
+                cardView.AnimateDeal();
+                yield return _waitForSeconds0_12;
             }
         }
 
         [Client]
-        public bool IsMyTurn() => NetworkClient.localPlayer is { netId: var netId } &&
-            _currentPlayerNetId == netId;
+        public bool IsMyTurn() => NetworkClient.localPlayer is { netId: var netId } && _currentPlayerNetId == netId;
 
         [Server]
         public void HandlePlayerCard(NetworkConnectionToClient conn, UnoCard card)
@@ -255,12 +314,11 @@ namespace UNO
 
             _deck.Discard(card);
 
-            RpcShowTopDiscard(card, _deck.DrawPileCount + 1);
+            SetTopDiscard(card, _deck.DrawPileCount + 1);
 
             var data = _playerData[netId];
             data.cardCount -= 1;
             _playerData[netId] = data;
-
 
             conn.Send(new ClientDeckMessage
             {
@@ -269,7 +327,7 @@ namespace UNO
                 DrawPileCount = _deck.DrawPileCount
             });
 
-            switch(card.Type)
+            switch (card.Type)
             {
                 case CardType.Reverse:
                     ReverseTurnDirection();
@@ -277,25 +335,19 @@ namespace UNO
                     break;
 
                 case CardType.Skip:
-                    SkipNextPlayer(); // move index past next player
-                    AdvanceTurn();    // then advance to the one after
+                    SkipNextPlayer();
+                    AdvanceTurn();
                     break;
 
                 case CardType.DrawTwo:
-                    // Give next player 2 cards then skip them
-                    //GiveCardsToNextPlayer(2);
-                    SkipNextPlayer();
                     AdvanceTurn();
                     break;
 
                 case CardType.WildDrawFour:
-                    // Give next player 4 cards then skip them
-                    //GiveCardsToNextPlayer(4);
-                    SkipNextPlayer();
                     AdvanceTurn();
                     break;
-
-                default:
+                        
+                default: // Number, Wild
                     AdvanceTurn();
                     break;
             }
@@ -312,14 +364,12 @@ namespace UNO
                 return;
             }
 
-            // Update count
             var data = _playerData[netId];
             data.cardCount++;
             _playerData[netId] = data;
 
             var canPlay = IsPlayableAgainstTop(drawnCard);
 
-            // Send drawn card privately to that player only
             conn.Send(new ClientDeckMessage
             {
                 clientDeckOperation = ClientDeckOperation.CardDrawn,
@@ -328,7 +378,7 @@ namespace UNO
                 CanPlayDrawnCard = canPlay,
             });
 
-            if(!canPlay)
+            if (!canPlay)
                 AdvanceTurn();
 
             Debug.Log($"[Server] {data} drew a card. Hand size: {data.cardCount}");
@@ -384,35 +434,11 @@ namespace UNO
             };
         }
 
-        /// <summary>
-        /// Builds one GUI row per opponent — skips local player.
-        /// </summary>
-        [ClientRpc]
-        private void RpcInitPlayersPanel()
-        {
-            foreach (Transform child in _playersContainer)
-                Destroy(child.gameObject);
-            _playerGUIs.Clear();
-            _netIdToGuiIndex.Clear();
-
-            uint selfNetId = NetworkClient.localPlayer.netId;
-
-            foreach (var (netId, info) in _playerData)
-            {
-                if (netId == selfNetId) continue;
-
-                var gui = Instantiate(_playerGUIPrefab, _playersContainer);
-                gui.UpdateCardCount(info.cardCount);
-
-                _netIdToGuiIndex[netId] = _playerGUIs.Count;
-                _playerGUIs.Add(gui);
-            }
-        }
 
         [ClientRpc]
-        public void RpcShowTopDiscard(UnoCard card, int drawCount)
+        private void RpcShowTopDiscard(UnoCard card, int drawCount)
         {
-            _lastTopDiscard = card;
+            _syncedTopDiscard = card;
 
             if (Card.CardSprites.TryGetValue(card.Id, out var sprite))
             {
@@ -432,18 +458,33 @@ namespace UNO
 
             if (newNetId == selfNetId)
             {
-                // My turn — enable playable cards only
+                _currentPlayerNameText.SetText($"you");
+
                 _canvasGroup.interactable = true;
                 _canvasGroup.blocksRaycasts = true;
                 RefreshHandInteractability(true);
             }
-            else if (oldNetId == selfNetId)
+            else
             {
-                // My turn ended — block all interaction
+                if (_playerData.TryGetValue(newNetId, out var currentPlayerInfo))
+                    _currentPlayerNameText.SetText(currentPlayerInfo.playerName);
+
                 _canvasGroup.interactable = false;
                 _canvasGroup.blocksRaycasts = true; // ← true always, so canvas still catches clicks
                 RefreshHandInteractability(false);
             }
+        }
+
+        private void OnTopDiscardChanged(UnoCard oldCard, UnoCard newCard)
+        {
+            _syncedTopDiscard = newCard;
+        }
+
+        [Server]
+        private void SetTopDiscard(UnoCard card, int drawCount)
+        {
+            _syncedTopDiscard = card;      // SyncVar, always consistent for late/joining clients too
+            RpcShowTopDiscard(card, drawCount); // keep RPC only for the visual/GUI update
         }
 
         /// <summary>
@@ -458,7 +499,7 @@ namespace UNO
                 _playerGUIs[index].UpdateCardCount(updatedData.cardCount);
         }
 
-        private void RefreshHandInteractability(bool isMyTurn)
+        public void RefreshHandInteractability(bool isMyTurn)
         {
             foreach (Transform item in _handContainer)
             {
@@ -471,22 +512,20 @@ namespace UNO
 
         private bool IsValidPlay(UnoCard card)
         {
-            var top = _lastTopDiscard;
-
-            if (card.Type == CardType.Wild ||
-                card.Type == CardType.WildDrawFour)
+            if (card.Type is CardType.Wild ||
+                card.Type is CardType.WildDrawFour)
                 return true;
 
-            if (card.Color == top.Color)
+            if (card.Color == _syncedTopDiscard.Color)
                 return true;
 
-            if (card.Type == CardType.Number &&
-                top.Type == CardType.Number)
+            if (card.Type is CardType.Number &&
+                _syncedTopDiscard.Type is CardType.Number)
             {
-                return card.FaceValue == top.FaceValue;
+                return card.FaceValue == _syncedTopDiscard.FaceValue;
             }
 
-            return card.Type == top.Type;
+            return card.Type == _syncedTopDiscard.Type;
         }
     }
 

@@ -120,10 +120,11 @@ namespace UNO
         internal void OnServerReady(NetworkConnectionToClient conn)
         {
             waitingConnections.Add(conn);
-            playerInfos.Add(conn, new PlayerRoomInfo
+            playerInfos.Add(conn, new()
             {
                 playerId = playerIndex,
-                isReady = false
+                isReady = false,
+                playerName = GenerateRandomPlayerName()
             });
             playerIndex++;
 
@@ -610,7 +611,7 @@ namespace UNO
             {
                 case ClientDeckOperation.CardDealt:
                     Debug.Log($"[Deck] Received {msg.Cards.Length} cards.");
-                    gc.ShowDealtCards(msg.Cards);
+                    gc.ShowDealtCards(msg.Cards, true);
                     break;
 
                 case ClientDeckOperation.CardPlayed:
@@ -619,12 +620,13 @@ namespace UNO
                     // SyncDictionary already updated the opponent card count.
                     // OnCurrentPlayerChanged already advanced the turn UI.
                     Debug.Log($"[Deck] Card played confirmed: {msg.TopDiscardCard}");
+                    gc.RefreshHandInteractability(false);
                     break;
 
                 case ClientDeckOperation.CardDrawn:
                     // Server sent us new cards (from DrawCard or DrawTwo/WildDrawFour penalty)
                     Debug.Log($"[Deck] Drew {msg.Cards.Length} card(s).");
-                    gc.ShowDealtCards(msg.Cards);  
+                    gc.ShowDealtCards(msg.Cards, false);  
                     gc.OnDrawnCardReceived(msg.CanPlayDrawnCard, msg.Cards[0]);// add cards to hand UI
                     //gc.RefreshHandInteractability();   // re-evaluate which cards are now playable
                     break;
@@ -883,6 +885,17 @@ namespace UNO
                     });
                 }
             }
+        }
+
+        private string GenerateRandomPlayerName()
+        {
+            const string letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+            Span<char> buffer = stackalloc char[3];
+
+            for (int i = 0; i < buffer.Length; i++)
+                buffer[i] = letters[UnityEngine.Random.Range(0, letters.Length)];
+
+            return new string(buffer);
         }
 
         #endregion

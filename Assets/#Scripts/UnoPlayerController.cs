@@ -18,15 +18,13 @@ namespace UNO
             if (!Instance.IsMyTurn())
                 return;
 
-            //Instance.ResetDrawnCardDecision();
-
             NetworkClient.Send(new ServerDeckMessage
             {
                 serverDeckOperation = ServerDeckOperation.PlayCard,
                 Card = card.CardData
             });
 
-            Destroy(card.gameObject);
+            card.PlayTowards(Instance.CardTargetTransform, Instance._canvas.transform, () => Destroy(card.gameObject));
         }
 
         #endregion
