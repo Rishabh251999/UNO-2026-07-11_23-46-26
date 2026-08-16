@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 7b609e2ea7e8e8e4d8ecea53818b5f9b
+guid: c1e040706ea44c949966aa227be2a566
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 3262112609331672732
-    second: dry-clean_0
+      213: -6231044458718751821
+    second: circle_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -46,7 +46,7 @@ TextureImporter:
   nPOTScale: 0
   lightmap: 0
   compressionQuality: 50
-  spriteMode: 2
+  spriteMode: 1
   spriteExtrude: 1
   spriteMeshType: 1
   alignment: 0
@@ -74,7 +74,7 @@ TextureImporter:
     buildTarget: DefaultTexturePlatform
     maxTextureSize: 2048
     resizeAlgorithm: 0
-    textureFormat: -1
+    textureFormat: 4
     textureCompression: 1
     compressionQuality: 50
     crunchedCompression: 0
@@ -113,7 +113,7 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: dry-clean_0
+      name: circle_0
       rect:
         serializedVersion: 2
         x: 0
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: c967980822a554d20800000000000000
-      internalID: 3262112609331672732
+      spriteID: 3b3176a0412e689a0800000000000000
+      internalID: -6231044458718751821
       vertices: []
       indices: 
       edges: []
@@ -138,7 +138,7 @@ TextureImporter:
     customData: 
     physicsShape: []
     bones: []
-    spriteID: 
+    spriteID: 5e97eb03825dee720800000000000000
     internalID: 0
     vertices: []
     indices: 
@@ -148,7 +148,7 @@ TextureImporter:
     spriteCustomMetadata:
       entries: []
     nameFileIdTable:
-      dry-clean_0: 3262112609331672732
+      circle_0: -6231044458718751821
   mipmapLimitGroupName: 
   pSDRemoveMatte: 0
   userData: 

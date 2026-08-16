@@ -299,7 +299,7 @@ namespace UNO
             switch (msg.serverDeckOperation)
             {
                 case ServerDeckOperation.PlayCard:
-                    controller.HandlePlayerCard(conn, msg.Card);
+                    controller.HandlePlayerCard(conn, msg.Card, msg.chosenWildColor);
                     break;
 
                 case ServerDeckOperation.DrawCard:

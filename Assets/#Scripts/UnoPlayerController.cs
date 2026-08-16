@@ -12,19 +12,32 @@ namespace UNO
             if (!isLocalPlayer)
                 return;
 
-            if (UnoGameController.Instance is not { } Instance)
+            if (UnoGameController.Instance is not { } instance)
                 return;
 
-            if (!Instance.IsMyTurn())
+            if (!instance.IsMyTurn())
                 return;
 
+            if (card.CardData.Type is CardType.Wild or CardType.WildDrawFour)
+            {
+                card.SetInteractable(false); // prevent double-clicks while choosing
+                instance.ShowColorPicker(chosenColor => SendPlay(card, instance, chosenColor));
+                return;
+            }
+
+            SendPlay(card, instance, CardColor.None);
+        }
+
+        private void SendPlay(Card card, UnoGameController instance, CardColor chosenColor)
+        {
             NetworkClient.Send(new ServerDeckMessage
             {
                 serverDeckOperation = ServerDeckOperation.PlayCard,
-                Card = card.CardData
+                Card = card.CardData,
+                chosenWildColor = chosenColor
             });
 
-            card.PlayTowards(Instance.CardTargetTransform, Instance._canvas.transform, () => Destroy(card.gameObject));
+            card.PlayTowards(instance.CardTargetTransform, instance._canvas.transform, () => Destroy(card.gameObject));
         }
 
         #endregion

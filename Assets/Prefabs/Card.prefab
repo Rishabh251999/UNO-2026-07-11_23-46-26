@@ -11,9 +11,9 @@ GameObject:
   - component: {fileID: 240241811772648127}
   - component: {fileID: 6788288333785836238}
   - component: {fileID: 9054795642197523693}
-  - component: {fileID: 3498564723203408028}
   - component: {fileID: 6251590154465919897}
   - component: {fileID: 7195645713958611071}
+  - component: {fileID: 3498564723203408028}
   m_Layer: 0
   m_Name: Card
   m_TagString: Untagged
@@ -78,19 +78,6 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 1
---- !u!114 &3498564723203408028
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 934318723966728993}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 05eb49bbb8dd7a4458938765f36fd376, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::UNO.Card
-  _cardImage: {fileID: 9054795642197523693}
 --- !u!114 &6251590154465919897
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -106,7 +93,7 @@ MonoBehaviour:
   m_IgnoreLayout: 0
   m_MinWidth: -1
   m_MinHeight: -1
-  m_PreferredWidth: 120
+  m_PreferredWidth: 125
   m_PreferredHeight: -1
   m_FlexibleWidth: -1
   m_FlexibleHeight: -1
@@ -155,3 +142,20 @@ MonoBehaviour:
   m_OnClick:
     m_PersistentCalls:
       m_Calls: []
+--- !u!114 &3498564723203408028
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 934318723966728993}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 05eb49bbb8dd7a4458938765f36fd376, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UNO.Card
+  CardData:
+    Id: 0
+    Color: 0
+    Type: 0
+    FaceValue: 0
