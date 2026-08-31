@@ -27,11 +27,16 @@ namespace UNO
         [Header("GUI References")]
         [SerializeField] private GamePlayerGUI _playerGUIPrefab;
         [Space(2.5f)]
+        [SerializeField] private Button _quitButton;
+        [SerializeField] private Button _pauseButton;
+        [SerializeField] private Button _resumeButton;
         [SerializeField] private Button _passTurnButton;
         [SerializeField] private Button _redColorButton;
         [SerializeField] private Button _blueColorButton;
         [SerializeField] private Button _greenColorButton;
         [SerializeField] private Button _yellowColorButton;
+
+
         [Space(2.5f)]
         [SerializeField] private Image _topDiscardImage;
         [SerializeField] private Image _turnTimerRingImage;
@@ -47,10 +52,11 @@ namespace UNO
 
         [Header("Gameobject References")]
         public GameObject _canvas;
-        [SerializeField] private GameObject _currentColorPanel;
         [SerializeField] private GameObject _hand;
+        [SerializeField] private GameObject _pausePanel;
         [SerializeField] private GameObject _countdownPanel;
         [SerializeField] private GameObject _colorPickerPanel;
+        [SerializeField] private GameObject _currentColorPanel;
         [SerializeField] private GameObject _cardDrawGameobject;
 
         [Space(5f)]
@@ -133,6 +139,10 @@ namespace UNO
             _canvasGroup.interactable = true;
             _canvasGroup.blocksRaycasts = true;
 
+            _quitButton.onClick.AddListener(OnClickQuitButton);
+            _pauseButton.onClick.AddListener(() => OpenAndClosePausePanel(true));
+            _resumeButton.onClick.AddListener(() => OpenAndClosePausePanel(false));
+
             _cardDrawButton.onClick.AddListener(OnDrawButtonClicked);
             _passTurnButton.onClick.AddListener(OnPassButtonClicked);
             _passTurnButton.gameObject.SetActive(false);
@@ -154,6 +164,10 @@ namespace UNO
             _greenColorButton.onClick.RemoveListener(OnGreenColorClicked);
             _blueColorButton.onClick.RemoveListener(OnBlueColorClicked);
 
+            _quitButton.onClick.RemoveListener(OnClickQuitButton);
+            _pauseButton.onClick.RemoveListener(() => OpenAndClosePausePanel(true));
+            _resumeButton.onClick.RemoveListener(() => OpenAndClosePausePanel(false));
+
             Instance = null;
         }
 
@@ -165,6 +179,20 @@ namespace UNO
             CardColor.Blue => _blueColor,
             _ => Color.white
         };
+
+        private void OnClickQuitButton()
+        {
+            NetworkClient.Send(new ServerDeckMessage()
+            {
+                serverDeckOperation = ServerDeckOperation.QuitMatch
+            });
+        }
+
+        private void OpenAndClosePausePanel(bool value)
+        {
+            _pausePanel.SetActive(value);
+        }
+
 
         [Client]
         private void OnDrawButtonClicked()
@@ -209,7 +237,8 @@ namespace UNO
             {
                 connectionId = netId,
                 cardCount = 0,
-                playerName = info.playerName
+                playerName = info.playerName,
+                isOwner = info.isOwner
             };
         }
 
@@ -397,6 +426,54 @@ namespace UNO
             var data = _playerData[netId];
             data.cardCount = newCount;
             _playerData[netId] = data;
+        }
+
+        public void HandlePlayerQuit(NetworkConnectionToClient conn)
+        {
+            var netId = conn.identity.netId;
+
+            if (!_serverPlayers.ContainsKey(netId))
+                return;
+
+            var wasCurrentPlayer = _currentPlayerNetId == netId;
+
+            _serverPlayers.Remove(netId);
+            _serverHands.Remove(netId);   
+            _turnOrder.Remove(netId);
+            _playerData.Remove(netId);
+
+            if (wasCurrentPlayer && _turnOrder.Count > 0)
+            {
+                _turnIndex %= _turnOrder.Count;
+                _currentPlayerNetId = _turnOrder[_turnIndex];
+                _turnStartTime = NetworkTime.time;
+            }
+
+            // Tell the quitting client to go back to the lobby (still connected!)
+            conn.Send(new ClientRoomMessage
+            {
+                clientRoomOperation = ClientRoomOperation.Left
+            });
+
+            // Remove their player object from the match without disconnecting them
+            if (conn.identity != null)
+            {
+                NetworkServer.RemovePlayerForConnection(conn, RemovePlayerOptions.Destroy);
+            }
+
+            foreach (var entry in _serverPlayers.Values)
+            {
+                entry.Conn.Send(new ClientDeckMessage
+                {
+                    clientDeckOperation = ClientDeckOperation.PlayerQuit
+                });
+            }
+
+            // If only one (or zero) players remain, you may want to end the match here
+            if (_turnOrder.Count <= 1)
+            {
+                // TODO: end match / declare remaining player winner
+            }
         }
 
         // ── Client ────────────────────────────────────────────────────────────
@@ -796,7 +873,9 @@ namespace UNO
 
         private void OnTurnStartTimeChanged(double oldValue, double newValue)
         {
-            _isTimerRunningLocally = true;
+            var isMyTurn = NetworkClient.localPlayer is { netId: var selfNetId } && _currentPlayerNetId == selfNetId;
+
+            _isTimerRunningLocally = isMyTurn;
 
             if (_turnTimerRingImage != null)
                 _turnTimerRingImage.fillAmount = 1f;

@@ -11,33 +11,24 @@ namespace UNO
     public class GameManager : MonoBehaviour
     {
         /// <summary>
-        /// Event invoked when a player disconnects
-        /// </summary>
-        public event Action<NetworkConnectionToClient> OnPlayerDisconnect;
-
-        /// <summary>
         /// Cross-reference of client that created the corresponding room
         /// </summary>
-        internal readonly Dictionary<NetworkConnectionToClient, Guid> playerRooms =
-            new();
+        internal readonly Dictionary<NetworkConnectionToClient, Guid> playerRooms = new();
 
         /// <summary>
         /// Open rooms that are available for joining
         /// </summary>
-        internal readonly Dictionary<Guid, RoomInfo> openRooms =
-            new();
+        internal readonly Dictionary<Guid, RoomInfo> openRooms = new();
 
         /// <summary>
         /// Network connections of all players in a room
         /// </summary>
-        internal readonly Dictionary<Guid, HashSet<NetworkConnectionToClient>> roomConnections =
-            new();
+        internal readonly Dictionary<Guid, HashSet<NetworkConnectionToClient>> roomConnections = new();
 
         /// <summary>
         /// Player information by Network Connection
         /// </summary>
-        internal readonly Dictionary<NetworkConnectionToClient, PlayerRoomInfo> playerInfos =
-            new();
+        internal readonly Dictionary<NetworkConnectionToClient, PlayerRoomInfo> playerInfos = new();
 
         private readonly Dictionary<Guid, UnoDeck> roomDecks = new();
 
@@ -46,8 +37,7 @@ namespace UNO
         /// <summary>
         /// Network connections that haven't joined a room yet
         /// </summary>
-        internal readonly List<NetworkConnectionToClient> waitingConnections =
-            new();
+        internal readonly List<NetworkConnectionToClient> waitingConnections = new();
 
         /// <summary>
         /// Room code the local player created
@@ -64,22 +54,15 @@ namespace UNO
         /// </summary>
         internal Guid selectedRoom = Guid.Empty;
 
+        [SerializeField] private LobbyManager _lobbyManager;
         [SerializeField] private RoomManager _roomManager;
 
         [SerializeField] private int maxPlayersPerRoom = 4;
         private int playerIndex = 1;
 
         [Header("GUI References")]
-        [SerializeField] private RoomGUI roomPrefab;
         [SerializeField] private UnoGameController matchControllerPrefab;
 
-        [SerializeField] private GameObject roomView;
-        [SerializeField] private GameObject lobbyView;
-
-        [SerializeField] private Transform matchList;
-
-        [SerializeField] private ToggleGroup toggleGroup;
-        [SerializeField] private Button createButton;
         [SerializeField] private Button joinButton;
 
         #region Initialization
@@ -134,9 +117,6 @@ namespace UNO
         [ServerCallback]
         internal IEnumerator OnServerDisconnect(NetworkConnectionToClient conn)
         {
-            // Invoke event so RoomControllers can clean up
-            OnPlayerDisconnect?.Invoke(conn);
-
             // If player created a room, remove it
             if (playerRooms.TryGetValue(conn, out var roomCode))
             {
@@ -148,7 +128,7 @@ namespace UNO
                 {
                     foreach (NetworkConnectionToClient playerConn in connections)
                     {
-                        PlayerRoomInfo playerInfo = playerInfos[playerConn];
+                        var playerInfo = playerInfos[playerConn];
                         playerInfo.isReady = false;
                         playerInfo.roomCode = Guid.Empty;
                         playerInfos[playerConn] = playerInfo;
@@ -214,9 +194,11 @@ namespace UNO
             Card.PopulateCardSprites();
 
             InitializeData();
-            ShowLobbyView();
-            createButton.gameObject.SetActive(true);
-            joinButton.gameObject.SetActive(true);
+
+            UIManager.Instance.SetState(ScreenType.Lobby);
+
+            _lobbyManager.UpdateRoomList(openRooms);
+
             NetworkClient.RegisterHandler<ClientRoomMessage>(OnClientRoomMessage);
             NetworkClient.RegisterHandler<ClientDeckMessage>(OnClientDeckMessage);
         }
@@ -290,6 +272,12 @@ namespace UNO
                 return;
             }
 
+            if (msg.serverDeckOperation is ServerDeckOperation.QuitMatch)
+            {
+                controller.HandlePlayerQuit(conn);
+                return;
+            }
+
             if (!controller.IsCurrentPlayer(conn))
             {
                 Debug.LogWarning($"[Server] Player {conn.identity.netId} acted out of turn!");
@@ -328,8 +316,9 @@ namespace UNO
                 isStarted = false
             });
 
-            PlayerRoomInfo playerInfo = playerInfos[conn];
+            var playerInfo = playerInfos[conn];
             playerInfo.isReady = false;
+            playerInfo.isOwner = true;
             playerInfo.roomCode = newRoomCode;
             playerInfos[conn] = playerInfo;
 
@@ -376,9 +365,10 @@ namespace UNO
             openRooms[roomCode] = roomInfo;
             roomConnections[roomCode].Add(conn);
 
-            PlayerRoomInfo playerInfo = playerInfos[conn];
+            var playerInfo = playerInfos[conn];
             playerInfo.isReady = false;
             playerInfo.roomCode = roomCode;
+            playerInfo.isOwner = false;
             playerInfos[conn] = playerInfo;
 
             PlayerRoomInfo[] info = roomConnections[roomCode]
@@ -583,7 +573,7 @@ namespace UNO
                     foreach (var item in msg.roomInfo)
                         openRooms.Add(item.roomCode, item);
 
-                    UpdateRoomList();
+                    _lobbyManager.UpdateRoomList(openRooms);
                     break;
 
                 case ClientRoomOperation.UpdateRoom:
@@ -591,8 +581,7 @@ namespace UNO
                     break;
 
                 case ClientRoomOperation.Started:
-                    lobbyView.SetActive(false);
-                    roomView.SetActive(false);
+                    UIManager.Instance.SetState(ScreenType.Game);
                     break;
 
                 case ClientRoomOperation.Error:
@@ -654,98 +643,6 @@ namespace UNO
         #region Button Callbacks (UI)
 
         /// <summary>
-        /// Called from Create Button
-        /// </summary>
-        [ClientCallback]
-        public void RequestCreateRoom()
-        {
-            NetworkClient.Send(new ServerRoomMessage { serverRoomOperation = ServerRoomOperation.Create });
-        }
-
-        /// <summary>
-        /// Called from Join Button
-        /// </summary>
-        [ClientCallback]
-        public void RequestJoinRoom()
-        {
-            if (selectedRoom == Guid.Empty)
-            {
-                Debug.LogWarning("No room selected");
-                return;
-            }
-
-            NetworkClient.Send(new ServerRoomMessage
-            {
-                serverRoomOperation = ServerRoomOperation.Join,
-                roomCode = selectedRoom
-            });
-        }
-
-        /// <summary>
-        /// Called from Leave Button
-        /// </summary>
-        [ClientCallback]
-        public void RequestLeaveRoom()
-        {
-            if (localJoinedRoom == Guid.Empty)
-            {
-                Debug.LogWarning("Not in a room");
-                return;
-            }
-
-            NetworkClient.Send(new ServerRoomMessage
-            {
-                serverRoomOperation = ServerRoomOperation.Leave
-            });
-        }
-
-        [ClientCallback]
-        public void RequestCancelRoom()
-        {
-            if (localPlayerRoom == Guid.Empty)
-            {
-                Debug.LogWarning("Not the room owner");
-                return;
-            }
-            NetworkClient.Send(new ServerRoomMessage
-            {
-                serverRoomOperation = ServerRoomOperation.Cancel
-            });
-        }
-
-        /// <summary>
-        /// Called from Ready Button
-        /// </summary>
-        [ClientCallback]
-        public void RequestReadyChange()
-        {
-            if (localPlayerRoom == Guid.Empty && localJoinedRoom == Guid.Empty)
-            {
-                Debug.LogWarning("Not in a room");
-                return;
-            }
-
-            var roomCode = localPlayerRoom != Guid.Empty ? localPlayerRoom : localJoinedRoom;
-
-            NetworkClient.Send(new ServerRoomMessage
-            {
-                serverRoomOperation = ServerRoomOperation.Ready,
-                roomCode = roomCode
-            });
-        }
-
-        [ClientCallback]
-        public void RequestStartGame()
-        {
-            if (localPlayerRoom == Guid.Empty) return;
-
-            NetworkClient.Send(new ServerRoomMessage
-            {
-                serverRoomOperation = ServerRoomOperation.Start,
-            });
-        }
-
-        /// <summary>
         /// Called when a room is selected in the list
         /// </summary>
         [ClientCallback]
@@ -765,78 +662,19 @@ namespace UNO
                 }
 
                 selectedRoom = roomId;
-                RoomInfo roomInfo = openRooms[roomId];
+                var roomInfo = openRooms[roomId];
                 joinButton.interactable = roomInfo.playerCount < roomInfo.maxPlayers;
             }
-        }
-
-        /// <summary>
-        /// Show lobby view (room list)
-        /// </summary>
-        [ClientCallback]
-        public void ShowLobbyView()
-        {
-            lobbyView.SetActive(true);
-            roomView.SetActive(false);
-
-            foreach (Transform item in matchList)
-            {
-                if(item.TryGetComponent<RoomGUI>(out RoomGUI roomGUI))
-                {
-                    if(roomGUI.GetRoomCode() == selectedRoom)
-                    {
-                        roomGUI.TryGetComponent<Toggle>(out var toggle);
-                        toggle.isOn = true;
-                    }
-                }
-            }
-        }
-
-        /// <summary>
-        /// Show room view (inside a room)
-        /// </summary>
-        [ClientCallback]
-        public void ShowRoomView()
-        {
-            lobbyView.SetActive(false);
-            roomView.SetActive(true);
         }
 
         #endregion
 
         #region UI Update Methods
 
-        /// <summary>
-        /// Update the room list UI with available rooms
-        /// </summary>
-        [ClientCallback]
-        public void UpdateRoomList()
-        {
-            // Clear existing room list UI
-            foreach (Transform child in matchList.transform)
-                Destroy(child.gameObject);
-
-            // Create UI elements for each room
-            foreach (var roomInfo in openRooms.Values)
-            {
-                var roomUIElement = Instantiate(roomPrefab, matchList.transform);
-                roomUIElement.transform.SetParent(matchList.transform, false);
-                roomUIElement.SetRoomInfo(roomInfo);
-
-                if (roomUIElement.TryGetComponent<Toggle>(out var toggle))
-                {
-                    toggle.group = toggleGroup;
-
-                    if (roomInfo.roomCode == selectedRoom)
-                        toggle.isOn = true;
-                }
-            }
-        }
-
         public void OnRoomCreated(Guid roomId)
         {
             localPlayerRoom = roomId;
-            ShowRoomView();
+            UIManager.Instance.SetState(ScreenType.Room);
             Debug.Log($"Room created: {roomId}");
         }
 
@@ -845,7 +683,7 @@ namespace UNO
         {
             localJoinedRoom = roomId;
             selectedRoom = Guid.Empty;
-            ShowRoomView();
+            UIManager.Instance.SetState(ScreenType.Room);
             Debug.Log($"Joined room: {roomId}");
         }
 
@@ -854,7 +692,11 @@ namespace UNO
         {
             localPlayerRoom = Guid.Empty;
             localJoinedRoom = Guid.Empty;
-            ShowLobbyView();
+
+            UIManager.Instance.SetState(ScreenType.Lobby);
+
+            _lobbyManager.UpdateRoomList(openRooms);
+
             Debug.Log("Left room");
         }
 

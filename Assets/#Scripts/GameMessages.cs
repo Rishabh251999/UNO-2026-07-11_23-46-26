@@ -68,6 +68,7 @@ namespace UNO
         public int playerId;
         public int cardCount;
         public bool isReady;
+        public bool isOwner;
         public Guid roomCode;
         public string playerName;
     }
@@ -75,6 +76,8 @@ namespace UNO
     [Serializable]
     public struct PlayerGameInfo
     {
+        public bool isOwner;
+
         public int cardCount;
         public uint connectionId;
         public string playerName;
@@ -100,7 +103,8 @@ namespace UNO
         None = 0,
         DrawCard = 1,  
         PlayCard = 2, 
-        PassTurn = 3,   
+        PassTurn = 3,
+        QuitMatch = 4,   // NEW
     }
 
     /// <summary>
@@ -129,6 +133,7 @@ namespace UNO
         DeckReshuffled = 5,
         Error = 6,
         StackedDraw = 7,
+        PlayerQuit = 8,
     }
 
     #endregion

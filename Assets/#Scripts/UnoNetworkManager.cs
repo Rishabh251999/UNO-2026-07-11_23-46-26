@@ -15,9 +15,7 @@ namespace UNO
         // Overrides the base singleton so we don't
         // have to cast to this type everywhere.
         public static UnoNetworkManager Singleton => (UnoNetworkManager)singleton;
-
-        [SerializeField] private Canvas _canvas;
-        private GameManager _gameManager;
+        [SerializeField] private GameManager _gameManager;
 
         /// <summary>
         /// Runs on both Server and Client
@@ -26,8 +24,6 @@ namespace UNO
         public override void Awake()
         {
             base.Awake();
-
-            _gameManager = _canvas.GetComponent<GameManager>();
         }
 
         #region Unity Callbacks
@@ -210,8 +206,6 @@ namespace UNO
         public override void OnClientConnect()
         {
             base.OnClientConnect();
-
-            _canvas.gameObject.SetActive(true);
         }
 
         /// <summary>
@@ -272,7 +266,6 @@ namespace UNO
         /// </summary>
         public override void OnStartClient()
         {
-            _canvas.gameObject.SetActive(true);
             _gameManager.OnStartClient();
         }
 
@@ -287,7 +280,6 @@ namespace UNO
         public override void OnStopServer()
         {
             _gameManager.OnStopServer();
-            _canvas.gameObject.SetActive(false);
         }
 
         /// <summary>
