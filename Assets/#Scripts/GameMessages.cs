@@ -120,6 +120,7 @@ namespace UNO
         UpdateRoom,
         ListUpdated,
         Started,
+        MatchEndedByOwner,
         Error
     }
 

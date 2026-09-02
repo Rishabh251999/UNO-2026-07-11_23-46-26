@@ -274,7 +274,7 @@ namespace UNO
 
             if (msg.serverDeckOperation is ServerDeckOperation.QuitMatch)
             {
-                controller.HandlePlayerQuit(conn);
+                HandleQuitMatch(conn, controller);
                 return;
             }
 
@@ -334,7 +334,6 @@ namespace UNO
             });
 
             SendRoomList();
-            Debug.Log($"RoomManager: Room {newRoomCode} created");
         }
 
         [ServerCallback]
@@ -538,6 +537,35 @@ namespace UNO
             SendRoomList();
         }
 
+        [ServerCallback]
+        private void HandleQuitMatch(NetworkConnectionToClient conn, UnoGameController controller)
+        {
+            var isOwner = playerInfos.TryGetValue(conn, out var playerInfo) && playerInfo.isOwner;
+
+            if (isOwner)
+                EndMatchForRoom(controller);
+
+            else
+                controller.HandlePlayerQuit(conn);
+        }
+
+        [ServerCallback]
+        private void EndMatchForRoom(UnoGameController controller)
+        {
+            if (!controller.TryGetComponent<NetworkMatch>(out var networkMatch))
+                return;
+
+            Guid roomCode = networkMatch.matchId;
+
+            controller.EndMatch(); 
+
+            matchControllers.Remove(roomCode);
+            roomDecks.Remove(roomCode);
+
+            if (controller != null)
+                NetworkServer.Destroy(controller.gameObject);
+        }
+
         #endregion
 
         #region Client Message Handler
@@ -584,6 +612,10 @@ namespace UNO
                     UIManager.Instance.SetState(ScreenType.Game);
                     break;
 
+                case ClientRoomOperation.MatchEndedByOwner:
+                    OnRoomLeft();
+                    break;
+
                 case ClientRoomOperation.Error:
                     Debug.LogError($"Room error: {msg.errorMessage}");
                     break;
@@ -599,41 +631,26 @@ namespace UNO
             switch (msg.clientDeckOperation)
             {
                 case ClientDeckOperation.CardDealt:
-                    Debug.Log($"[Deck] Received {msg.Cards.Length} cards.");
                     gc.ShowDealtCards(msg.Cards, true);
                     break;
 
                 case ClientDeckOperation.CardPlayed:
-                    // Server confirmed the play — nothing extra needed client-side.
-                    // RpcShowTopDiscard already updated the discard image.
-                    // SyncDictionary already updated the opponent card count.
-                    // OnCurrentPlayerChanged already advanced the turn UI.
-                    Debug.Log($"[Deck] Card played confirmed: {msg.TopDiscardCard}");
                     gc.RefreshHandInteractability(false);
                     break;
 
                 case ClientDeckOperation.CardDrawn:
-                    // Server sent us new cards (from DrawCard or DrawTwo/WildDrawFour penalty)
-                    Debug.Log($"[Deck] Drew {msg.Cards.Length} card(s).");
                     gc.ShowDealtCards(msg.Cards, false);  
-                    gc.OnDrawnCardReceived(msg.CanPlayDrawnCard, msg.Cards[0]);// add cards to hand UI
-                    //gc.RefreshHandInteractability();   // re-evaluate which cards are now playable
+                    gc.OnDrawnCardReceived(msg.CanPlayDrawnCard, msg.Cards[0]);
                     break;
 
                 case ClientDeckOperation.DeckReshuffled:
-                    Debug.Log($"[Deck] Deck reshuffled. {msg.DrawPileCount} cards remaining.");
-                    // DrawPileCount SyncVar/RpcShowTopDiscard will handle the count text already
                     break;
 
                 case ClientDeckOperation.StackedDraw:
-                    // Player must draw msg.DrawPileCount cards or play a matching +2/+4
-                    Debug.Log($"[Deck] Stacked draw — you must draw {msg.DrawPileCount} or counter!");
-                    // TODO: highlight valid counter-cards
                     break;
 
                 case ClientDeckOperation.Error:
                     Debug.LogError($"[Deck] Error: {msg.errorMessage}");
-                    // TODO: optionally show an error popup in UI
                     break;
             }
         }
@@ -675,7 +692,6 @@ namespace UNO
         {
             localPlayerRoom = roomId;
             UIManager.Instance.SetState(ScreenType.Room);
-            Debug.Log($"Room created: {roomId}");
         }
 
         [ClientCallback]
@@ -684,7 +700,6 @@ namespace UNO
             localJoinedRoom = roomId;
             selectedRoom = Guid.Empty;
             UIManager.Instance.SetState(ScreenType.Room);
-            Debug.Log($"Joined room: {roomId}");
         }
 
 

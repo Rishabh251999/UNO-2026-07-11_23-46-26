@@ -47,11 +47,7 @@ namespace UNO
                 _drawPile.Add(Make(ref id, CardColor.None, CardType.WildDrawFour, 50));
             }
 
-            Debug.Assert(_drawPile.Count == 108,
-            $"[UnoDeck] Expected 108 cards, built {_drawPile.Count}");
-
             Shuffle();
-            Debug.Log($"[UnoDeck] Built and shuffled {_drawPile.Count} cards.");
         }
 
         [Server]

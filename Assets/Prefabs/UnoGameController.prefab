@@ -383,7 +383,7 @@ RectTransform:
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 50, y: -120}
+  m_AnchoredPosition: {x: 50, y: -144.49988}
   m_SizeDelta: {x: 150, y: 217}
   m_Pivot: {x: 0, y: 1}
 --- !u!222 &2781944714963740858
@@ -1430,10 +1430,10 @@ RectTransform:
   - {fileID: 3755387997165060449}
   m_Father: {fileID: 8869861148855501164}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 1, y: 1}
+  m_AnchorMin: {x: 0, y: 1}
   m_AnchorMax: {x: 1, y: 1}
-  m_AnchoredPosition: {x: -256, y: -475}
-  m_SizeDelta: {x: 450, y: 175}
+  m_AnchoredPosition: {x: 0, y: -477}
+  m_SizeDelta: {x: -100, y: 197.0389}
   m_Pivot: {x: 0.5, y: 0.5}
 --- !u!222 &6516325153749286149
 CanvasRenderer:
@@ -1484,13 +1484,14 @@ GameObject:
   - component: {fileID: 7441963274088874054}
   - component: {fileID: 126273394177068136}
   - component: {fileID: 8847810343929250702}
+  - component: {fileID: 3327447790147429473}
   m_Layer: 0
-  m_Name: 'Color change Panel '
+  m_Name: Notfication Panel
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
-  m_IsActive: 0
+  m_IsActive: 1
 --- !u!224 &7441963274088874054
 RectTransform:
   m_ObjectHideFlags: 0
@@ -1507,11 +1508,11 @@ RectTransform:
   - {fileID: 685686701041948355}
   m_Father: {fileID: 8869861148855501164}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
-  m_AnchorMin: {x: 0, y: 1}
-  m_AnchorMax: {x: 0, y: 1}
-  m_AnchoredPosition: {x: 256, y: -475}
-  m_SizeDelta: {x: 450, y: 175}
-  m_Pivot: {x: 0.5, y: 0.5}
+  m_AnchorMin: {x: 1, y: 1}
+  m_AnchorMax: {x: 1, y: 1}
+  m_AnchoredPosition: {x: -49.99997, y: -154.1142}
+  m_SizeDelta: {x: 728.29, y: 197.679}
+  m_Pivot: {x: 1, y: 1}
 --- !u!222 &126273394177068136
 CanvasRenderer:
   m_ObjectHideFlags: 0
@@ -1550,6 +1551,20 @@ MonoBehaviour:
   m_FillOrigin: 0
   m_UseSpriteMesh: 0
   m_PixelsPerUnitMultiplier: 0.75
+--- !u!114 &3327447790147429473
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 3013458608878013471}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 9e266f2c3ec984c4dbdb67d376e31fab, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::UNO.NotificationView
+  _notificationText1: {fileID: 2930022955940972404}
+  _notificationText2: {fileID: 4885413313126373810}
 --- !u!1 &3265394314830949430
 GameObject:
   m_ObjectHideFlags: 0
@@ -2258,7 +2273,7 @@ Transform:
   m_GameObject: {fileID: 4818250737937721203}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 525.9039, y: 914.3111, z: 0}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children:
@@ -2315,6 +2330,7 @@ MonoBehaviour:
   syncInterval: 0
   _cardPrefab: {fileID: 3498564723203408028, guid: 190bdb6d3cacaa149b10c785f2419648, type: 3}
   _playerGUIPrefab: {fileID: 1550379586369496839, guid: 804331514e08bb644ba29e77c2f1d882, type: 3}
+  _notificationView: {fileID: 3327447790147429473}
   _quitButton: {fileID: 5485786712585900270}
   _pauseButton: {fileID: 9004346894302111613}
   _resumeButton: {fileID: 5838545840195846960}
@@ -2326,7 +2342,6 @@ MonoBehaviour:
   _topDiscardImage: {fileID: 8753747177897803517}
   _turnTimerRingImage: {fileID: 4135106980131199952}
   _countdownText: {fileID: 212190977381646632}
-  _currentColorText: {fileID: 4885413313126373810}
   _drawPileCountText: {fileID: 5045986744495704263}
   _currentPlayerNameText: {fileID: 1599380317581338946}
   _canvas: {fileID: 8038590926722901965}
@@ -2334,13 +2349,13 @@ MonoBehaviour:
   _pausePanel: {fileID: 6453792569612374167}
   _countdownPanel: {fileID: 5288940563935062446}
   _colorPickerPanel: {fileID: 6699408017340351260}
-  _currentColorPanel: {fileID: 3013458608878013471}
   _cardDrawGameobject: {fileID: 1741146029258031769}
   _cardTargetTransform: {fileID: 8923102032844777173}
   _cardPerPlayer: 7
   _turnTimeLimit: 15
   _playMoveDuration: 0.3
   _countdownStepDuration: 1
+  _notificationDisplayDuration: 2
 --- !u!1 &5211065207347656532
 GameObject:
   m_ObjectHideFlags: 0
@@ -2504,7 +2519,7 @@ GameObject:
   - component: {fileID: 2930022955940972404}
   - component: {fileID: 6868383880077530284}
   m_Layer: 0
-  m_Name: Current Color Text
+  m_Name: Notfication Text
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -2527,7 +2542,7 @@ RectTransform:
   m_AnchorMin: {x: 0.5, y: 1}
   m_AnchorMax: {x: 0.5, y: 1}
   m_AnchoredPosition: {x: 0, y: -25}
-  m_SizeDelta: {x: 272.94, y: 40.22}
+  m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0.5, y: 1}
 --- !u!222 &4862627512159501421
 CanvasRenderer:
@@ -2557,7 +2572,7 @@ MonoBehaviour:
   m_OnCullStateChanged:
     m_PersistentCalls:
       m_Calls: []
-  m_text: Color changes to
+  m_text: 
   m_isRightToLeft: 0
   m_fontAsset: {fileID: 11400000, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
   m_sharedMaterial: {fileID: 2180264, guid: 8f586378b4e144a9851e7b34d9b748ee, type: 2}
@@ -2590,7 +2605,7 @@ MonoBehaviour:
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 0
+  m_fontStyle: 1
   m_HorizontalAlignment: 32
   m_VerticalAlignment: 512
   m_textAlignment: 65535
@@ -2807,7 +2822,7 @@ GameObject:
   - component: {fileID: 4885413313126373810}
   - component: {fileID: 4425863494955099709}
   m_Layer: 0
-  m_Name: Current Color
+  m_Name: Notfication
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -3547,8 +3562,8 @@ RectTransform:
   - {fileID: 5431458957423844905}
   - {fileID: 4448464489838049152}
   - {fileID: 146295121375502634}
-  - {fileID: 3987862564752941135}
   - {fileID: 7441963274088874054}
+  - {fileID: 3987862564752941135}
   - {fileID: 4441272247604633545}
   - {fileID: 542424974665361583}
   - {fileID: 8923102032844777173}
@@ -3741,7 +3756,7 @@ MonoBehaviour:
   m_enableAutoSizing: 0
   m_fontSizeMin: 18
   m_fontSizeMax: 72
-  m_fontStyle: 0
+  m_fontStyle: 1
   m_HorizontalAlignment: 32
   m_VerticalAlignment: 512
   m_textAlignment: 65535
